@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Premium Renovation Calculator</title>
+    <style>
+        /* --- CSS ПЕРЕМЕННЫЕ (ГЛОБАЛЬНЫЙ СТИЛЬ) --- */
+        :root {
+            --accent-color: #6366f1; /* Индиго */
+            --accent-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            --glass-bg: rgba(255, 255, 255, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.6);
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --card-radius: 28px;
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        /* Сброс и база */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            margin: 0; padding: 0;
+            font-family: var(--font-family);
+            background-color: #f1f5f9;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+            perspective: 1200px; /* Глубина для 3D */
+        }
+
+        /* --- АНИМИРОВАННЫЙ ФОН (BLOBS) --- */
+        .ambient-bg {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;
+            overflow: hidden; background: #f8fafc;
+        }
+        .blob {
+            position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.6;
+            animation: float 20s infinite ease-in-out;
+        }
+        .blob-1 { width: 400px; height: 400px; background: #c4b5fd; top: -100px; left: -100px; }
+        .blob-2 { width: 350px; height: 350px; background: #93c5fd; bottom: -50px; right: -50px; animation-delay: -5s; }
+        .blob-3 { width: 200px; height: 200px; background: #fca5a5; top: 40%; left: 30%; animation-delay: -10s; }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+        }
+
+        /* --- 3D КАРТОЧКА --- */
+        .calc-wrapper {
+            width: 100%; max-width: 480px; padding: 20px;
+            transform-style: preserve-3d; /* Важно для 3D */
+            transition: transform 0.1s ease-out;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--card-radius);
+            box-shadow: 
+                0 20px 40px -10px rgba(0,0,0,0.1), 
+                0 0 0 1px rgba(255,255,255,0.5) inset;
+            overflow: hidden;
+            display: flex; flex-direction: column;
+            min-height: 550px;
+            transform: translateZ(20px); /* Выдвигаем контент вперед */
+        }
+
+        /* --- UI HEADER --- */
+        .progress-container { padding: 30px 30px 10px 30px; }
+        .progress-track {
+            height: 6px; background: rgba(0,0,0,0.05); border-radius: 10px; overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%; width: 0%; background: var(--accent-gradient);
+            border-radius: 10px; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.5);
+        }
+
+        /* --- КОНТЕНТ (ШАГИ) --- */
+        .step-content {
+            padding: 20px 30px 30px 30px;
+            flex-grow: 1; display: flex; flex-direction: column;
+        }
+
+        .step { display: none; flex-direction: column; height: 100%; }
+        .step.active { display: flex; }
+
+        h2 { font-size: 24px; font-weight: 800; color: var(--text-primary); margin: 0 0 10px 0; letter-spacing: -0.5px; }
+        p.subtitle { color: var(--text-secondary); font-size: 15px; margin: 0 0 25px 0; line-height: 1.5; }
+
+        /* --- КАРТОЧКИ ВЫБОРА (OPTIONS) --- */
+        .options-grid { display: grid; gap: 12px; }
+
+        .option-card {
+            background: rgba(255,255,255,0.5);
+            border: 2px solid transparent;
+            padding: 16px; border-radius: 18px;
+            cursor: pointer; position: relative;
+            display: flex; align-items: center; gap: 15px;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            transform: translateY(20px); opacity: 0; /* Для анимации появления */
+            animation: slideUp 0.5s forwards;
+        }
+        /* Задержка анимации для эффекта лесенки */
+        .step.active .option-card:nth-child(1) { animation-delay: 0.1s; }
+        .step.active .option-card:nth-child(2) { animation-delay: 0.2s; }
+        .step.active .option-card:nth-child(3) { animation-delay: 0.3s; }
+
+        @keyframes slideUp { to { transform: translateY(0); opacity: 1; } }
+
+        .option-card:hover { background: #fff; transform: translateY(-3px) scale(1.02); box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
+        .option-card.selected { background: #fff; border-color: var(--accent-color); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); }
+
+        .opt-icon {
+            font-size: 24px; width: 44px; height: 44px;
+            background: #fff; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+        .opt-text strong { display: block; color: var(--text-primary); margin-bottom: 3px; }
+        .opt-text span { font-size: 13px; color: var(--text-secondary); }
+
+        /* --- СЛАЙДЕР --- */
+        .range-wrapper { text-align: center; margin: 40px 0; }
+        .range-display {
+            font-size: 56px; font-weight: 800;
+            background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; margin-top: 20px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 32px; width: 32px; border-radius: 50%;
+            background: #fff; border: 4px solid var(--accent-color);
+            cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-top: -12px;
+            transition: transform 0.2s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.1); }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px;
+        }
+
+        /* --- CHECKBOX TOGGLES --- */
+        .toggle-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 18px; background: rgba(255,255,255,0.6); border-radius: 16px; margin-bottom: 10px;
+            transition: 0.2s;
+        }
+        .toggle-switch {
+            width: 52px; height: 30px; background: #cbd5e1; border-radius: 30px;
+            position: relative; transition: 0.3s; cursor: pointer;
+        }
+        .toggle-switch::after {
+            content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px;
+            background: #fff; border-radius: 50%; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .toggle-item.active .toggle-switch { background: var(--accent-color); }
+        .toggle-item.active .toggle-switch::after { transform: translateX(22px); }
+
+        /* --- NAVIGATION --- */
+        .nav-footer {
+            margin-top: auto; display: flex; gap: 15px; padding-top: 20px;
+        }
+        .btn {
+            border: none; padding: 16px 24px; border-radius: 14px;
+            font-weight: 600; font-size: 16px; cursor: pointer; transition: 0.3s;
+        }
+        .btn-primary {
+            background: var(--accent-gradient); color: #fff; width: 100%;
+            box-shadow: 0 8px 20px -5px rgba(99, 102, 241, 0.4);
+            position: relative; overflow: hidden;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 25px -5px rgba(99, 102, 241, 0.6); }
+        .btn-back { background: transparent; color: var(--text-secondary); }
+        .btn-back:hover { background: rgba(0,0,0,0.05); color: var(--text-primary); }
+
+        /* --- RESULT SCREEN --- */
+        .result-box {
+            text-align: center; background: #fff; padding: 30px; border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.05); margin-bottom: 25px;
+            animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .price-final {
+            font-size: 42px; font-weight: 900;
+            background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin: 10px 0;
+        }
+        
+        .messenger-btn {
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            width: 100%; padding: 16px; margin-bottom: 12px; border-radius: 14px;
+            text-decoration: none; color: #fff; font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .messenger-btn:hover { transform: scale(1.02); }
+        .bg-wa { background: linear-gradient(90deg, #25D366, #128C7E); box-shadow: 0 4px 15px rgba(37, 211, 102, 0.4); }
+        .bg-tg { background: linear-gradient(90deg, #229ED9, #0088cc); box-shadow: 0 4px 15px rgba(34, 158, 217, 0.4); }
+
+    </style>
+</head>
+<body>
+
+    <!-- Живой фон -->
+    <div class="ambient-bg">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <!-- 3D Контейнер -->
+    <div class="calc-wrapper" id="tiltWrapper">
+        <div class="glass-card">
+            
+            <!-- Прогресс -->
+            <div class="progress-container">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 600; text-transform: uppercase;">
+                    <span id="stepCounter">Шаг 1 из 5</span>
+                    <span id="percentCounter">0%</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progressBar"></div>
+                </div>
+            </div>
+
+            <div class="step-content">
+                
+                <!-- STEP 1: Тип объекта -->
+                <div class="step active" id="step1">
+                    <h2>Что будем ремонтировать?</h2>
+                    <p class="subtitle">От типа дома зависит стоимость черновых работ.</p>
+                    <div class="options-grid">
+                        <div class="option-card" onclick="selectOption('type', 'new', 1.0, this)">
+                            <div class="opt-icon">🏢</div>
+                            <div class="opt-text"><strong>Новостройка</strong><span>Свободная планировка / Бетон</span></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('type', 'secondary', 1.3, this)">
+                            <div class="opt-icon">🏠</div>
+                            <div class="opt-text"><strong>Вторичка</strong><span>Требуется демонтаж старого</span></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('type', 'house', 1.1, this)">
+                            <div class="opt-icon">🏡</div>
+                            <div class="opt-text"><strong>Частный дом</strong><span>Коттедж или таунхаус</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 2: Площадь -->
+                <div class="step" id="step2">
+                    <h2>Площадь помещения</h2>
+                    <p class="subtitle">Укажите примерный метраж по полу.</p>
+                    
+                    <div class="range-wrapper">
+                        <div class="range-display"><span id="areaVal">55</span> <span style="font-size: 24px; color: #94a3b8;">м²</span></div>
+                        <input type="range" min="20" max="200" value="55" step="1" oninput="updateArea(this.value)">
+                    </div>
+                    
+                    <div class="nav-footer">
+                        <button class="btn btn-back" onclick="prevStep()">Назад</button>
+                        <button class="btn btn-primary" onclick="nextStep()">Далее</button>
+                    </div>
+                </div>
+
+                <!-- STEP 3: Комнаты -->
+                <div class="step" id="step3">
+                    <h2>Количество комнат</h2>
+                    <div class="options-grid">
+                        <div class="option-card" onclick="selectOption('rooms', '1', 0, this)">
+                            <div class="opt-icon">1️⃣</div>
+                            <div class="opt-text"><strong>Студия / 1 комната</strong></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('rooms', '2', 0, this)">
+                            <div class="opt-icon">2️⃣</div>
+                            <div class="opt-text"><strong>2 комнаты</strong></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('rooms', '3', 0, this)">
+                            <div class="opt-icon">3️⃣</div>
+                            <div class="opt-text"><strong>3 комнаты и более</strong></div>
+                        </div>
+                    </div>
+                    <div class="nav-footer">
+                        <button class="btn btn-back" onclick="prevStep()">Назад</button>
+                    </div>
+                </div>
+
+                <!-- STEP 4: Стиль (Цена) -->
+                <div class="step" id="step4">
+                    <h2>Класс ремонта</h2>
+                    <div class="options-grid">
+                        <div class="option-card" onclick="selectOption('level', 'base', 12000, this)">
+                            <div class="opt-icon">🛠</div>
+                            <div class="opt-text"><strong>Базовый</strong><span>Косметика, недорогие материалы</span></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('level', 'standard', 25000, this)">
+                            <div class="opt-icon">✨</div>
+                            <div class="opt-text"><strong>Комфорт</strong><span>Капитальный, выравнивание, плитка</span></div>
+                        </div>
+                        <div class="option-card" onclick="selectOption('level', 'premium', 45000, this)">
+                            <div class="opt-icon">💎</div>
+                            <div class="opt-text"><strong>Премиум</strong><span>По дизайн-проекту, дорогие бренды</span></div>
+                        </div>
+                    </div>
+                    <div class="nav-footer">
+                        <button class="btn btn-back" onclick="prevStep()">Назад</button>
+                    </div>
+                </div>
+
+                <!-- STEP 5: Опции -->
+                <div class="step" id="step5">
+                    <h2>Дополнительные услуги</h2>
+                    <p class="subtitle">Что включить в расчет?</p>
+                    
+                    <div class="toggle-item" onclick="toggleAddon('design', 2500, this)">
+                        <div class="opt-text"><strong>Дизайн-проект</strong><span>Чертежи + Визуализация 3D</span></div>
+                        <div class="toggle-switch"></div>
+                    </div>
+
+                    <div class="toggle-item" onclick="toggleAddon('materials', 0.4, this)">
+                        <div class="opt-text"><strong>Закупка черновых</strong><span>Смеси, клеи, провода (материал)</span></div>
+                        <div class="toggle-switch"></div>
+                    </div>
+
+                    <div class="toggle-item" onclick="toggleAddon('sound', 1500, this)">
+                        <div class="opt-text"><strong>Шумоизоляция</strong><span>Стены и потолок</span></div>
+                        <div class="toggle-switch"></div>
+                    </div>
+
+                    <div class="nav-footer">
+                        <button class="btn btn-back" onclick="prevStep()">Назад</button>
+                        <button class="btn btn-primary" onclick="calculateResult()">Рассчитать итог</button>
+                    </div>
+                </div>
+
+                <!-- RESULT -->
+                <div class="step" id="stepResult">
+                    <div style="text-align: center; margin-top: 20px;">
+                        <h2>Готово! 🎉</h2>
+                        <p class="subtitle">Предварительный расчет вашего проекта:</p>
+                        
+                        <div class="result-box">
+                            <div style="font-size: 12px; color: #94a3b8; text-transform: uppercase;">Бюджет (Работа + Материалы)</div>
+                            <div class="price-final" id="finalPrice">0 ₽</div>
+                            <div style="font-size: 13px; color: #ef4444;">* Цена зафиксирована на 7 дней</div>
+                        </div>
+
+                        <p class="subtitle" style="margin-bottom: 15px;">Куда отправить детальную смету PDF?</p>
+
+                        <a href="#" id="waLink" target="_blank" class="messenger-btn bg-wa">
+                            <span>WhatsApp</span>
+                        </a>
+                        <a href="#" id="tgLink" target="_blank" class="messenger-btn bg-tg">
+                            <span>Telegram</span>
+                        </a>
+                        
+                        <button class="btn btn-back" onclick="location.reload()" style="margin-top: 10px; width: 100%;">Начать заново</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+<script>
+    /* --- 1. ЛОГИКА И ЦЕНЫ (Edit here) --- */
+    const CONFIG = {
+        // Коэффициенты
+        type: { new: 1, secondary: 1.3, house: 1.1 },
+        level: { base: 12000, standard: 25000, premium: 45000 },
+        // Контакты
+        phone: "79991234567",
+        username: "username" 
+    };
+
+    // Состояние
+    let state = {
+        step: 1,
+        data: {
+            type: { val: 'new', factor: 1, name: 'Новостройка' },
+            area: 55,
+            rooms: { val: '1', name: '1 комната' },
+            level: { val: 'standard', price: 25000, name: 'Комфорт' },
+            addons: [] // { id, price, name, isPercent }
+        }
+    };
+
+    const totalSteps = 6;
+
+    /* --- 2. ФУНКЦИИ ИНТЕРФЕЙСА --- */
+
+    function updateProgress() {
+        const percent = Math.round(((state.step - 1) / (totalSteps - 1)) * 100);
+        document.getElementById('progressBar').style.width = percent + '%';
+        document.getElementById('percentCounter').innerText = percent + '%';
+        document.getElementById('stepCounter').innerText = state.step < 6 ? `Шаг ${state.step} из 5` : 'Финал';
+    }
+
+    function showStep(n) {
+        document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+        document.getElementById(n === 6 ? 'stepResult' : 'step' + n).classList.add('active');
+        state.step = n;
+        updateProgress();
+    }
+
+    function nextStep() { if (state.step < totalSteps) showStep(state.step + 1); }
+    function prevStep() { if (state.step > 1) showStep(state.step - 1); }
+
+    // Выбор опции (Type, Rooms, Level)
+    function selectOption(category, value, factorOrPrice, el) {
+        // Визуальное выделение
+        const parent = el.closest('.options-grid');
+        parent.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+
+        // Сохранение данных
+        const name = el.querySelector('.opt-text strong').innerText;
+        if (category === 'level') {
+            state.data[category] = { val: value, price: factorOrPrice, name };
+        } else if (category === 'type') {
+            state.data[category] = { val: value, factor: factorOrPrice, name };
+        } else {
+            state.data[category] = { val: value, name };
+        }
+
+        // Автопереход
+        setTimeout(nextStep, 350);
+    }
+
+    // Слайдер
+    function updateArea(val) {
+        state.data.area = parseInt(val);
+        document.getElementById('areaVal').innerText = val;
+    }
+
+    // Тогглы (Допы)
+    function toggleAddon(id, price, el) {
+        el.classList.toggle('active');
+        const isActive = el.classList.contains('active');
+        const name = el.querySelector('.opt-text strong').innerText;
+        
+        if (isActive) {
+            state.data.addons.push({ id, price, name, isPercent: price < 10 }); 
+            // * if price < 10, считаем как коэффициент (0.4 = 40%)
+        } else {
+            state.data.addons = state.data.addons.filter(a => a.id !== id);
+        }
+    }
+
+    /* --- 3. РАСЧЕТ И ИТОГ --- */
+    function formatMoney(num) { return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+
+    function calculateResult() {
+        showStep(6);
+        
+        // База: Площадь * ЦенаРемонта * СложностьТипа
+        let baseCost = state.data.area * state.data.level.price * state.data.type.factor;
+        
+        // Допы
+        let addonsCost = 0;
+        let percentAddonsFactor = 0;
+
+        state.data.addons.forEach(addon => {
+            if (addon.isPercent) {
+                percentAddonsFactor += addon.price; // накапливаем проценты
+            } else {
+                addonsCost += addon.price * state.data.area; // цена за метр
+            }
+        });
+
+        // Добавляем процентные допы (например материалы) к базе
+        let materialCost = baseCost * percentAddonsFactor;
+        
+        let total = baseCost + addonsCost + materialCost;
+        
+        // Диапазон
+        let min = Math.floor(total * 0.95 / 1000) * 1000;
+        let max = Math.floor(total * 1.15 / 1000) * 1000;
+        
+        document.getElementById('finalPrice').innerText = `${formatMoney(min)} - ${formatMoney(max)} ₽`;
+
+        generateLinks(min, max);
+    }
+
+    function generateLinks(min, max) {
+        const addonsNames = state.data.addons.map(a => a.name).join(', ') || 'Нет';
+        const msg = `
+👋 Здравствуйте! Расчет с сайта:
+🏠 Объект: ${state.data.type.name}
+📐 Площадь: ${state.data.area} м²
+🚪 Комнат: ${state.data.rooms.name}
+💎 Ремонт: ${state.data.level.name}
+➕ Опции: ${addonsNames}
+💰 Итог: ${formatMoney(min)} - ${formatMoney(max)} ₽
+
+Нужна консультация.
+        `.trim();
+        const enc = encodeURIComponent(msg);
+        document.getElementById('waLink').href = `https://wa.me/${CONFIG.phone}?text=${enc}`;
+        document.getElementById('tgLink').href = `https://t.me/${CONFIG.username}?text=${enc}`;
+    }
+
+    /* --- 4. 3D TILT EFFECT (DESKTOP ONLY) --- */
+    const wrapper = document.getElementById('tiltWrapper');
+    const card = wrapper.querySelector('.glass-card');
+
+    if (window.matchMedia("(hover: hover)").matches) {
+        document.addEventListener('mousemove', (e) => {
+            const x = (window.innerWidth / 2 - e.pageX) / 30;
+            const y = (window.innerHeight / 2 - e.pageY) / 30;
+            wrapper.style.transform = `rotateY(${x}deg) rotateX(${y}deg)`;
+        });
+    }
+
+    // Старт
+    updateProgress();
+</script>
+
+</body>
+</html>
